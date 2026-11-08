@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="iPhone Test">
+<link rel="manifest" href="manifest.webmanifest">
+<title>iPhone Test</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;margin:0;padding:16px;padding-top:max(16px,env(safe-area-inset-top));background:#fff;color:#111;line-height:1.4}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:16px;margin:20px 0 6px}
+  .box{border:1px solid #ccc;border-radius:10px;padding:12px;margin:8px 0}
+  textarea{width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1px solid #888;border-radius:8px;min-height:90px}
+  button{font-size:16px;padding:10px 14px;border-radius:8px;border:1px solid #888;background:#f2f2f2;margin:6px 6px 0 0}
+  .ok{color:#0a6b1f}.bad{color:#b00020;font-weight:bold}.mu{color:#555;font-size:14px}
+  #err{display:none;background:#b00020;color:#fff;padding:12px;border-radius:8px;margin:8px 0;font-weight:bold}
+  #st div{padding:3px 0;border-bottom:1px solid #eee}
+  ol{padding-left:20px}
+</style>
+</head>
+<body>
+<h1>iPhone Test</h1>
+<div class="mu">Technischer Test. Kein Lerninhalt, keine echten Daten eintragen.</div>
+
+<div id="err"></div>
+
+<h2>1. Status</h2>
+<div class="box" id="st"></div>
+
+<h2>2. Test-Notiz (wird gespeichert)</h2>
+<div class="box">
+  <textarea id="note" placeholder="Hier etwas Harmloses eintippen, z. B. Testtext 1"></textarea>
+  <div id="saved" class="mu"></div>
+  <button id="b1">Jetzt speichern</button>
+  <button id="b2">Notiz löschen</button>
+</div>
+
+<h2>3. Testablauf</h2>
+<div class="box">
+<ol>
+  <li>Text eintippen. Unten muss „Gespeichert ✓" stehen.</li>
+  <li>Safari ganz schließen, Seite wieder öffnen: Ist der Text noch da?</li>
+  <li>Warte, bis oben „Offline-Cache: aktiv" steht.</li>
+  <li>Flugmodus an, Seite im Safari neu laden: Lädt sie?</li>
+  <li>Flugmodus aus. Teilen → „Zum Home-Bildschirm". Dort öffnen.</li>
+  <li>Hinweis: Die Home-Bildschirm-App hat einen eigenen Speicher. Tippe dort einen neuen Text ein.</li>
+  <li>Flugmodus an, Home-Bildschirm-App schließen und wieder öffnen: Startet sie? Ist der Text da?</li>
+  <li>Einige Tage später nochmal öffnen: Ist der Text noch da?</li>
+</ol>
+</div>
+
+<script>
+(function () {
+  var KEY = 'test_note';   // nur dieser Test-Schluessel; kein anderer Schluessel wird benutzt
+  var KEY_OPEN = 'test_opens';
+  var $ = function (id) { return document.getElementById(id); };
+  var note = $('note'), saved = $('saved'), err = $('err'), st = $('st');
+  var lines = {};
+
+  function line(id, text, cls) {
+    var d = lines[id];
+    if (!d) { d = document.createElement('div'); st.appendChild(d); lines[id] = d; }
+    d.className = cls || '';
+    d.textContent = text;
+  }
+  function showErr(msg) { err.style.display = 'block'; err.textContent = 'FEHLER: ' + msg; }
+  function clearErr() { err.style.display = 'none'; err.textContent = ''; }
+
+  function save() {
+    var v = note.value;
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ t: v, at: new Date().toLocaleString('de-DE') }));
+      var back = JSON.parse(localStorage.getItem(KEY));
+      if (!back || back.t !== v) throw new Error('Wert wurde gespeichert, aber beim Zurücklesen nicht gefunden.');
+      clearErr();
+      saved.className = 'ok';
+      saved.textContent = 'Gespeichert ✓ ' + back.at;
+      return true;
+    } catch (e) {
+      saved.className = 'bad';
+      saved.textContent = 'NICHT gespeichert ✗';
+      showErr('Speichern fehlgeschlagen. Der Text geht beim Schließen verloren. (' + (e && e.message ? e.message : e) + ')');
+      return false;
+    }
+  }
+
+  // Beim Start lesen
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var o = JSON.parse(raw);
+      note.value = o.t || '';
+      saved.className = 'ok';
+      saved.textContent = 'Beim Öffnen gefunden ✓ (gespeichert am ' + o.at + ')';
+    } else {
+      saved.className = 'mu';
+      saved.textContent = 'Noch nichts gespeichert (Speicher war beim Öffnen leer).';
+    }
+    var n = parseInt(localStorage.getItem(KEY_OPEN) || '0', 10) + 1;
+    localStorage.setItem(KEY_OPEN, String(n));
+    line('opens', 'Anzahl Öffnungen in diesem Speicher: ' + n, 'ok');
+  } catch (e) {
+    saved.className = 'bad';
+    saved.textContent = 'Speicher nicht lesbar ✗';
+    showErr('localStorage ist nicht verfügbar oder gesperrt. (' + (e && e.message ? e.message : e) + ')');
+    line('opens', 'Speicher: nicht verfügbar', 'bad');
+  }
+
+  note.addEventListener('input', save);
+  $('b1').addEventListener('click', save);
+  $('b2').addEventListener('click', function () {
+    note.value = '';
+    try { localStorage.removeItem(KEY); saved.className = 'mu'; saved.textContent = 'Notiz gelöscht.'; clearErr(); }
+    catch (e) { showErr('Löschen fehlgeschlagen. (' + e + ')'); }
+  });
+
+  // Status
+  line('https', 'Sichere Verbindung (https): ' + (window.isSecureContext ? 'ja' : 'NEIN'), window.isSecureContext ? 'ok' : 'bad');
+  var standalone = (window.navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  line('mode', 'Geöffnet als: ' + (standalone ? 'Home-Bildschirm-App' : 'Safari-Tab'));
+  line('adr', 'Adresse: ' + location.href.replace(/[?#].*$/, ''));
+  line('load', 'Seite geladen um: ' + new Date().toLocaleTimeString('de-DE'));
+  function net() { line('net', 'Netzwerk laut Gerät: ' + (navigator.onLine ? 'online' : 'OFFLINE'), navigator.onLine ? '' : 'bad'); }
+  net(); window.addEventListener('online', net); window.addEventListener('offline', net);
+
+  if (!('serviceWorker' in navigator)) {
+    line('sw', 'Offline-Cache: nicht unterstützt ✗', 'bad');
+  } else {
+    line('sw', 'Offline-Cache: wird eingerichtet …');
+    navigator.serviceWorker.register('sw.js').then(function () {
+      return navigator.serviceWorker.ready;
+    }).then(function () {
+      function upd() {
+        line('sw', navigator.serviceWorker.controller
+          ? 'Offline-Cache: aktiv ✓'
+          : 'Offline-Cache: installiert, aktiv ab nächstem Laden (Seite einmal neu laden)',
+          navigator.serviceWorker.controller ? 'ok' : '');
+      }
+      upd();
+      navigator.serviceWorker.addEventListener('controllerchange', upd);
+    }).catch(function (e) {
+      line('sw', 'Offline-Cache: Fehler ✗ (' + (e && e.message ? e.message : e) + ')', 'bad');
+    });
+  }
+
+  // Dauerhafter Speicher (Hinweis, kein Muss)
+  if (navigator.storage && navigator.storage.persisted) {
+    navigator.storage.persisted().then(function (p) {
+      line('persist', 'Dauerhafter Speicher zugesichert: ' + (p ? 'ja' : 'nein (normal bei Safari)'));
+    });
+  }
+})();
+</script>
+</body>
+</html>
